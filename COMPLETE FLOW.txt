@@ -1,0 +1,437 @@
+COMPLETE FLOW:
+
+https://chatgpt.com/s/t_6a3b6d051ff08191a8234a2e4d4ec3bb
+
+
+
+Here's the **precise architecture** of your project after the semantic memory upgrade.
+
+# 1. Entry Point
+
+### app.py
+
+Receives API requests.
+
+```text
+POST /search
+POST /feedback
+```
+
+Search:
+
+```python
+workflow.invoke(...)
+```
+
+Feedback:
+
+```python
+add_feedback(...)
+```
+
+---
+
+# 2. Workflow Orchestrator
+
+### agent/workflow.py
+
+Builds LangGraph pipeline.
+
+```text
+github_search
+      ↓
+scoring
+      ↓
+ranking
+```
+
+This file only defines execution order.
+
+---
+
+# 3. State Management
+
+### agent/state.py
+
+Shared data container.
+
+```python
+AgentState
+```
+
+Stores:
+
+```text
+user_query
+github_results
+final_answer
+feedback
+```
+
+Passed between nodes.
+
+---
+
+# 4. Search Layer
+
+### agent/research_agent.py
+
+Main business logic.
+
+## github_search_node()
+
+```text
+Query
+ ↓
+MCP Client
+ ↓
+GitHub Search
+```
+
+Stores:
+
+```python
+state["github_results"]
+```
+
+---
+
+## scoring_node()
+
+```text
+Repositories
+ ↓
+Rank Repositories
+```
+
+Calls:
+
+```python
+rank_repositories()
+```
+
+Stores ranked repos.
+
+---
+
+## ranking_node()
+
+```text
+Query
+ ↓
+Semantic Memory Retrieval
+ ↓
+Groq LLM
+ ↓
+Final Answer
+```
+
+Calls:
+
+```python
+get_relevant_feedback()
+analyze_repositories()
+```
+
+---
+
+## feedback_node()
+
+```text
+User Feedback
+ ↓
+Memory System
+```
+
+Calls:
+
+```python
+add_feedback()
+```
+
+---
+
+# 5. MCP Layer
+
+### mcp/client.py
+
+Simple wrapper.
+
+```text
+Agent
+ ↓
+MCP Client
+ ↓
+GitHub Tool
+```
+
+---
+
+### mcp/tools/github_tool.py
+
+Actual GitHub API calls.
+
+```text
+GitHub API
+ ↓
+Repositories
+```
+
+Returns:
+
+```python
+[
+  {
+    "name": ...
+    "stars": ...
+    "description": ...
+  }
+]
+```
+
+---
+
+# 6. Ranking Layer
+
+### agent/scoring.py
+
+Repository scoring logic.
+
+```text
+Query
+ ↓
+Keyword Match
+ ↓
+Stars
+ ↓
+Final Score
+```
+
+Formula:
+
+```text
+score =
+relevance*100
++
+stars*0.01
+```
+
+Returns sorted repositories.
+
+---
+
+# 7. Memory Layer
+
+### memory/embeddings.py
+
+Loads embedding model.
+
+```python
+SentenceTransformer(
+    "all-MiniLM-L6-v2"
+)
+```
+
+Converts:
+
+```text
+Query
+ ↓
+Vector Embedding
+```
+
+Example:
+
+```python
+[-0.12, 0.44, ...]
+```
+
+---
+
+### memory/feedback_store.py
+
+Most important file.
+
+---
+
+## add_feedback()
+
+```text
+New Feedback
+ ↓
+Generate Embedding
+ ↓
+Compare Against Stored Embeddings
+ ↓
+Cosine Similarity
+```
+
+If:
+
+```text
+similarity >= threshold
+```
+
+Update existing record.
+
+Else:
+
+```text
+Create new record
+```
+
+---
+
+## get_relevant_feedback()
+
+```text
+Search Query
+ ↓
+Generate Embedding
+ ↓
+Compare Against Stored Embeddings
+ ↓
+Find Top Matches
+ ↓
+Return Feedback
+```
+
+Used during search.
+
+---
+
+# 8. Storage Layer
+
+### memory/feedbacks.json
+
+Persistent memory.
+
+Stores:
+
+```json
+{
+  "query": "...",
+  "embedding": [...],
+  "feedback": "...",
+  "updated_at": "..."
+}
+```
+
+Acts as your mini vector database.
+
+---
+
+# 9. LLM Layer
+
+### llm/groq_client.py
+
+Builds prompt.
+
+Input:
+
+```text
+Query
++
+Top Repositories
++
+Retrieved Feedback
+```
+
+Calls:
+
+```python
+client.chat.completions.create(...)
+```
+
+Returns:
+
+```text
+Final Recommendation
+```
+
+---
+
+# Complete Runtime Flow
+
+## Search Flow
+
+```text
+User
+ ↓
+app.py
+ ↓
+workflow.py
+ ↓
+research_agent.py
+
+github_search_node
+ ↓
+github_tool.py
+ ↓
+GitHub
+
+scoring_node
+ ↓
+scoring.py
+
+ranking_node
+ ↓
+feedback_store.py
+ ↓
+embeddings.py
+
+retrieved preferences
+ ↓
+groq_client.py
+ ↓
+Groq
+ ↓
+Final Answer
+ ↓
+User
+```
+
+---
+
+## Feedback Flow
+
+```text
+User Feedback
+ ↓
+app.py
+ ↓
+feedback_store.py
+
+query
+ ↓
+embeddings.py
+ ↓
+vector
+
+compare with stored vectors
+ ↓
+cosine similarity
+
+match?
+ ├─ yes → update memory
+ └─ no  → create memory
+
+ ↓
+feedbacks.json
+```
+
+# In One Line
+
+```text
+app.py          → API Layer
+workflow.py     → Execution Flow
+research_agent  → Orchestration Logic
+github_tool.py  → Data Collection
+scoring.py      → Ranking
+embeddings.py   → Vector Creation
+feedback_store  → Semantic Memory
+feedbacks.json  → Storage
+groq_client.py  → Reasoning & Final Recommendation
+```
+
+That's the complete architecture of your current LangGraph + MCP + Groq + Semantic Human-in-the-Loop Research Navigator.
